@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Application</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #chat { width: 100%; height: 300px; border: 1px solid #ccc; overflow-y: scroll; padding: 5px; }
+        #message { width: 100%; }
+        #username, #password { margin-bottom: 10px; }
+        #register-form, #login-form { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div id="register">
+        <h2>Register</h2>
+        <input type="text" id="register-username" placeholder="Enter username">
+        <input type="password" id="register-password" placeholder="Enter password">
+        <button onclick="register()">Register</button>
+        <p>Already have an account? <a href="#" onclick="showLogin()">Login</a></p>
+    </div>
+
+    <div id="login" style="display:none;">
+        <h2>Login</h2>
+        <input type="text" id="username" placeholder="Enter username">
+        <input type="password" id="password" placeholder="Enter password">
+        <button onclick="login()">Login</button>
+        <p>Don't have an account? <a href="#" onclick="showRegister()">Register</a></p>
+    </div>
+
+    <div id="chat-section" style="display:none;">
+        <div id="chat"></div>
+        <input type="text" id="message" placeholder="Type your message here">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+
+    <script>
+        const socket = io();
+
+        function showRegister() {
+            document.getElementById('register').style.display = 'block';
+            document.getElementById('login').style.display = 'none';
+        }
+
+        function showLogin() {
+            document.getElementById('register').style.display = 'none';
+            document.getElementById('login').style.display = 'block';
+        }
+
+        function register() {
+            const username = document.getElementById('register-username').value;
+            const password = document.getElementById('register-password').value;
+            
+            fetch('/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            }).then(response => {
+                if (response.ok) {
+                    alert('Registration successful. Please log in.');
+                    showLogin();
+                } else {
+                    response.json().then(data => alert(data.message));
+                }
+            });
+        }
+
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            fetch('/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            }).then(response => {
+                if (response.ok) {
+                    document.getElementById('login').style.display = 'none';
+                    document.getElementById('chat-section').style.display = 'block';
+                } else {
+                    alert('Invalid username or password');
+                }
+            });
+        }
+
+        function sendMessage() {
+            const username = document.getElementById('username').value;
+            const message = document.getElementById('message').value;
+            socket.emit('message', { username, message });
+            document.getElementById('message').value = '';
+        }
+
+        socket.on('message', function(msg) {
+            const chat = document.getElementById('chat');
+            chat.innerHTML += '<div>' + msg + '</div>';
+            chat.scrollTop = chat.scrollHeight; // Auto-scroll to the bottom
+        });
+    </script>
+</body>
+</html>
+
