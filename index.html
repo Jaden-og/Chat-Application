@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <style>
+        .hidden { display: none; }
+        .toggle-button { cursor: pointer; color: blue; text-decoration: underline; }
+        .message { cursor: pointer; }
+        .owner { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <!-- Registration and Login Section -->
+    <div id="auth-section">
+        <div id="register-section">
+            <h2>Register</h2>
+            <input type="text" id="register-username" placeholder="Username">
+            <input type="password" id="register-password" placeholder="Password">
+            <button onclick="register()">Register</button>
+            <p>Already have an account? <span class="toggle-button" onclick="showLogin()">Login</span></p>
+        </div>
+
+        <div id="login-section" class="hidden">
+            <h2>Login</h2>
+            <input type="text" id="username" placeholder="Username">
+            <input type="password" id="password" placeholder="Password">
+            <button onclick="login()">Login</button>
+            <p>Don't have an account? <span class="toggle-button" onclick="showRegister()">Register</span></p>
+        </div>
+    </div>
+
+    <!-- Chat Section -->
+    <div id="chat-section" class="hidden">
+        <h2>Chat</h2>
+        <div id="chat"></div>
+        <input type="text" id="message" placeholder="Type your message here">
+        <button onclick="sendMessage()">Send</button>
+        <button onclick="togglePrivateChat()">Private Chat</button>
+    </div>
+
+    <!-- Profile Section -->
+    <div id="profile" class="hidden">
+        <h2 id="profile-username"></h2>
+        <p id="profile-messages-sent"></p>
+        <button onclick="closeProfile()">Close</button>
+    </div>
+
+    <!-- Private Chat Section -->
+    <div id="private-chat-section" class="hidden">
+        <h2>Private Chat</h2>
+        <input type="text" id="room-id" placeholder="Enter Room ID">
+        <button onclick="createRoom()">Create Room</button>
+        <button onclick="joinRoom()">Join Room</button>
+        <div id="private-chat"></div>
+        <input type="text" id="private-message" placeholder="Type your message here">
+        <button onclick="sendPrivateMessage()">Send</button>
+    </div>
+
+    <script>
+        var socket = io();
+
+        function register() {
+            const username = document.getElementById('register-username').value;
+            const password = document.getElementById('register-password').value;
+
+            fetch('/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            }).then(response => response.json())
+              .then(data => {
+                if (data.status === 'success') {
+                    alert('Registration successful! Please log in.');
+                    showLogin(); // Automatically show the login form after registration
+                } else {
+                    alert(data.message);
+                }
+            });
+        }
+
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            fetch('/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            }).then(response => response.json())
+              .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('chat-section').style.display = 'block';
+                    document.getElementById('auth-section').style.display = 'none';
+                } else {
+                    alert('Login failed');
+                }
+            });
+        }
+
+        function sendMessage() {
+            const message = document.getElementById('message').value;
+            const username = document.getElementById('username').value;
+            socket.emit('message', { username, message });
+            document.getElementById('message').value = '';
+        }
+
+        socket.on('message', function(msg) {
+            const chat = document.getElementById('chat');
+            const username = msg.split(':')[0]; // Extract username
+            const userMessage = msg.split(':').slice(1).join(':'); // Extract message
+
+            const messageElement = document.createElement('div');
+            messageElement.className = 'message';
+            if (username === document.getElementById('username').value) {
+                messageElement.classList.add('owner');
+            }
+            messageElement.innerHTML = `<a href="#" onclick="showProfile('${username}')">${username}: ${userMessage}</a>`;
+            chat.appendChild(messageElement);
+            chat.scrollTop = chat.scrollHeight; // Auto-scroll to the bottom
+        });
+
+        function showProfile(username) {
+            fetch(`/profile/${username}`).then(response => response.json())
+                .then(data => {
+                    if (data.status !== 'error') {
+                        document.getElementById('profile-username').innerText = data.username;
+                        document.getElementById('profile-messages-sent').innerText = `Messages sent: ${data.messages_sent}`;
+                        document.getElementById('profile').style.display = 'block';
+                    } else {
+                        alert(data.message);
+                    }
+            });
+        }
+
+        function closeProfile() {
+            document.getElementById('profile').style.display = 'none';
+        }
+
+        function togglePrivateChat() {
+            const privateChatSection = document.getElementById('private-chat-section');
+            privateChatSection.style.display = privateChatSection.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function createRoom() {
+            fetch('/create_room', {
+                method: 'POST'
+            }).then(response => response.json())
+              .then(data => {
+                document.getElementById('room-id').value = data.room_id;
+                alert(`Room created with ID: ${data.room_id}`);
+            });
+        }
+
+        function joinRoom() {
+            const room_id = document.getElementById('room-id').value;
+            const username = document.getElementById('username').value;
+            socket.emit('join_room', { room_id, username });
+        }
+
+        function sendPrivateMessage() {
+            const message = document.getElementById('private-message').value;
+            const room_id = document.getElementById('room-id').value;
+            const username = document.getElementById('username').value;
+            socket.emit('private_message', { room_id, username, message });
+            document.getElementById('private-message').value = '';
+        }
+
+        socket.on('private_message', function(msg) {
+            const chat = document.getElementById('private-chat');
+            chat.innerHTML += '<div>' + msg + '</div>';
+            chat.scrollTop = chat.scrollHeight; // Auto-scroll to the bottom
+        });
+
+        // Toggle between registration and login forms
+        function showRegister() {
+            document.getElementById('register-section').classList.remove('hidden');
+            document.getElementById('login-section').classList.add('hidden');
+        }
+
+        function showLogin() {
+            document.getElementById('login-section').classList.remove('hidden');
+            document.getElementById('register-section').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
